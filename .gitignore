@@ -6,7 +6,9 @@ __pycache__/
 *.egg-info/
 .venv/
 .env
-*.yaml
+secrets.yaml
+*.secrets.yaml
+
 
 
 # Logs
