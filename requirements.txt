@@ -1,0 +1,19 @@
+apache-airflow==2.9.3
+
+# HTTP / API
+requests
+cdsapi
+
+# Data
+numpy
+pandas
+xarray
+dask
+netcdf4
+cfgrib
+
+# Config / utils
+pyyaml
+
+# Plotting (если реально используешь в DAG или utils)
+matplotlib

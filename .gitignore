@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env
+
+# Logs
+logs/
+logs_1/
+*.log
+
+# Airflow cache
+airflow/dags/__pycache__/
+
+# Data 
+app/data/climatology/
+app/data/datasets/
+app/data/datasets_1/
+data/
+
+# Temporary model / forecast artifacts
+era_tmp_files/
+gfs_tmp_files/
+
+# OS / IDE
+.DS_Store
+.vscode/
