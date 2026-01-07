@@ -1,5 +1,7 @@
 import xarray as xr
-from configs import Logger
+
+from app.tools.configs import Logger
+
 
 
 class Merger:

@@ -36,3 +36,8 @@ gfs_tmp_files/
 
 # Jupyter
 *.ipynb
+
+
+# Old backups
+OLD_*
+*OLD*
