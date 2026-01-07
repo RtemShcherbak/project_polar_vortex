@@ -1,14 +1,16 @@
 import pandas as pd
 import cdsapi
+import os
 from pathlib import Path
 from dataclasses import dataclass, field
 
 import logging
 from typing import Optional
 from logging.handlers import RotatingFileHandler
+from get_secrets import get_secret
 
-# ROOT_PATH = "/Users/artem/Documents/Zerich/polar_vortex/project_polar_vortex/app" 
-ROOT_PATH = "/opt/airflow/app"
+ROOT_PATH = "/Users/artem/Documents/Zerich/polar_vortex/project_polar_vortex/app" 
+# ROOT_PATH = "/opt/airflow/app"
 
 
 
@@ -139,7 +141,8 @@ class ERA_const:
     ## CDS client
     ## ----------------------------------------------------------------------
     url: str = "https://cds.climate.copernicus.eu/api"
-    key: str = "48d27a50-14ad-432e-b1cd-f1f5bd781c24"
+    # key: str = field(default_factory=lambda: ERA_const.get_env("CDS_API_KEY"))
+    key: str = field(default_factory=lambda: get_secret("CDS_API_KEY"))
     verify: int = 1 
     quiet: bool = False
     timeout: int = 10
@@ -175,8 +178,15 @@ class ERA_const:
         )
     )
 
-    
+    @staticmethod
+    def get_env(name: str) -> str:
+        value = os.getenv(name)
+        if value is None:
+            raise RuntimeError(f"Environment variable {name} is not set")
+        return value
 
+
+    
 
 
 @dataclass
