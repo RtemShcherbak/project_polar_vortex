@@ -7,7 +7,10 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from app.tools.configs import GFS_const, Constant, Logger
-
+from exceptions import (
+    TemporaryDataUnavailable, IncompleteDataError, 
+    DataValidationError, FatalPipelineError
+)
 
 
 class GFS_loader:
@@ -145,12 +148,15 @@ class GFS_loader:
             f"Could not find available GFS cycle for {run_date.date()} "
             f"among {preferred_cycles}"
         )
-        raise RuntimeError(
-            f"Could not find available cycle for {run_date.date()} "
-            f"among {preferred_cycles}"
+        # raise RuntimeError(
+        #     f"Could not find available cycle for {run_date.date()} "
+        #     f"among {preferred_cycles}"
+        # )
+        raise TemporaryDataUnavailable(
+            f"GFS cycle not yet available for {run_date.date()}"
         )
-    
 
+    
     def __merge_tmpfs(
         self,
         grib_dir: Path,
@@ -160,44 +166,56 @@ class GFS_loader:
         out_nc = Path(out_nc)
 
         dsets = []
-        for p in sorted(grib_dir.glob("*.grib2")):
-            ds = xr.open_dataset(p, engine="cfgrib")
-            # valid_time = time + step (стандартный случай GFS)
-            if "step" in ds.coords:
-                vt = ds["time"] + ds["step"]
-            else:
-                vt = ds["time"]
-            # гарантируем размерность valid_time=1
-            if "valid_time" not in ds.dims:
-                ds = ds.assign_coords(valid_time=vt)
-                ds = ds.expand_dims(
-                    valid_time=[np.array(vt.values).item()]
+
+        try:
+            for p in sorted(grib_dir.glob("*.grib2")):
+                ds = xr.open_dataset(p, engine="cfgrib")
+                # valid_time = time + step (стандартный случай GFS)
+                if "step" in ds.coords:
+                    vt = ds["time"] + ds["step"]
+                else:
+                    vt = ds["time"]
+                # гарантируем размерность valid_time=1
+                if "valid_time" not in ds.dims:
+                    ds = ds.assign_coords(valid_time=vt)
+                    ds = ds.expand_dims(
+                        valid_time=[np.array(vt.values).item()]
+                    )
+                # step больше не нужен
+                if "step" in ds.variables and "step" not in ds.dims:
+                    ds = ds.drop_vars("step")
+                dsets.append(ds)
+            if not dsets:
+                raise IncompleteDataError(
+                    f"No GFS GRIB files found in {grib_dir}"
                 )
-            # step больше не нужен
-            if "step" in ds.variables and "step" not in ds.dims:
-                ds = ds.drop_vars("step")
-            dsets.append(ds)
-        if not dsets:
-            raise RuntimeError(f"No GRIB files found in {grib_dir}")
 
-        ds_all = xr.concat(
-            dsets,
-            dim="valid_time",
-            data_vars="minimal",
-            coords="minimal",
-            compat="override",
-        )
+            ds_all = xr.concat(
+                dsets,
+                dim="valid_time",
+                data_vars="minimal",
+                coords="minimal",
+                compat="override",
+            )
 
-        # приведение и сортировка времени
-        ds_all = ds_all.assign_coords(
-            valid_time=ds_all.valid_time.astype("datetime64[ns]")
-        )
-        ds_all = ds_all.sortby("valid_time")
+            # приведение и сортировка времени
+            ds_all = ds_all.assign_coords(
+                valid_time=ds_all.valid_time.astype("datetime64[ns]")
+            )
+            ds_all = ds_all.sortby("valid_time")
 
-        out_nc.parent.mkdir(parents=True, exist_ok=True)
-        ds_all.to_netcdf(out_nc, engine="netcdf4")
+            out_nc.parent.mkdir(parents=True, exist_ok=True)
+            ds_all.to_netcdf(out_nc, engine="netcdf4")
 
-        return ds_all
+            return ds_all
+        
+        except IncompleteDataError:
+            raise
+
+        except Exception as e:
+            raise DataValidationError(
+                f"GFS merge failed for directory {grib_dir}"
+            ) from e
 
 
     def __remove_tmpfs(self, grib_dir):
@@ -262,6 +280,10 @@ class GFS_loader:
                 self.logger.loading_error(
                     f"[FACT_GFS] FAILED {ymd}: {type(e).__name__}: {e}"
                 )
+                raise IncompleteDataError(
+                    f"GFS FACT download incomplete, failed at {ymd}"
+                ) from e
+
         self.logger.loading("[FACT_GFS] end loading")
 
 
@@ -308,6 +330,10 @@ class GFS_loader:
                 self.__download(url, str(out_file))
             except Exception as e:
                 self.logger.loading_error(f"  FAILED f{fhr:03d}: {e}")#, file=sys.stderr)
+                raise IncompleteDataError(
+                    f"GFS FORECAST incomplete, failed at f{fhr:03d}"
+                ) from e
+
         self.logger.loading("[FORECAST_GFS] end loading")
     
 

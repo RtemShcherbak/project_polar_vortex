@@ -4,7 +4,10 @@ import pandas as pd
 import xarray as xr
 
 from app.tools.configs import ERA_const, Constant, Logger
-
+from exceptions import (
+    TemporaryDataUnavailable, IncompleteDataError, 
+    DataValidationError, FatalPipelineError
+)
 
 
 class ERA5_loader:
@@ -53,17 +56,23 @@ class ERA5_loader:
         for h in self.logger._logger.handlers:
             cds_logger.addHandler(h)
         ## 3. Client
-        client = cdsapi.Client(
-            url=self.era_const.url,
-            key=self.era_const.key,
-            verify=self.era_const.verify,
-            quiet=self.era_const.quiet,
-            timeout=self.era_const.timeout,
-            retry_max=self.era_const.retry_max,
-            sleep_max=self.era_const.sleep_max,
-        )
-        self.logger.loading("[FACT_ERA] Connected to CDS API OK")
-        return client
+        try: 
+            client = cdsapi.Client(
+                url=self.era_const.url,
+                key=self.era_const.key,
+                verify=self.era_const.verify,
+                quiet=self.era_const.quiet,
+                timeout=self.era_const.timeout,
+                retry_max=self.era_const.retry_max,
+                sleep_max=self.era_const.sleep_max,
+            )
+            self.logger.loading("[FACT_ERA] Connected to CDS API OK")
+            return client
+        
+        except Exception as e:
+            raise TemporaryDataUnavailable(
+                "CDS API is not available"
+            ) from e
 
 
     ## ------------------------------------------------------------------------
@@ -101,7 +110,9 @@ class ERA5_loader:
                     self.logger.loading_error(
                         f"[FACT_ERA] FAILED downloading {target} | {type(e).__name__}: {e}"
                     )
-                    continue
+                    raise IncompleteDataError(
+                        f"ERA5 download incomplete, failed for year={year}"
+                    ) from e
                 else:
                     self.logger.loading(f"[FACT_ERA] Finished downloading: {target}")
 
@@ -111,6 +122,11 @@ class ERA5_loader:
             self.const.fact_dir / "era_tmp_files" / self.era_filename(year)
             for year in self.__specify_dates().keys()
         ]
+        missing = [f for f in era_nc_files if not f.exists()]
+        if missing:
+            raise DataValidationError(
+                f"Missing ERA files before merge: {missing}"
+            )
 
         target = (
             self.const.fact_dir /
@@ -127,8 +143,9 @@ class ERA5_loader:
             self.logger.loading_error(
                 f"[FACT_ERA] FAILED building ERA dataset | {type(e).__name__}: {e}"
             )
-            raise
-
+            raise DataValidationError(
+                "ERA5 merge failed"
+            ) from e
         else:
             self.logger.loading(
                 f"[FACT_ERA] ERA dataset written to {target}"
