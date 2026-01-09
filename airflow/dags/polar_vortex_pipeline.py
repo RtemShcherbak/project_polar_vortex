@@ -3,10 +3,11 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.utils.trigger_rule import TriggerRule
-from airflow.operators.short_circuit import ShortCircuitOperator
+# from airflow.operators.short_circuit import ShortCircuitOperator
 from airflow.utils import timezone
+import pendulum
 
 ## data
 from app.tools.configs import Constant
@@ -20,6 +21,7 @@ from app.tools.loaders.exceptions import (
     FatalPipelineError,
     DataValidationError
 )
+from app.tools.data_prepoc import Vars
 ## bot
 import asyncio
 from pathlib import Path
@@ -35,60 +37,67 @@ from app.tools.get_secrets import get_secret
 default_args = {
     "owner": "polar_vortex",
     "depends_on_past": False,
-    "retries": 6,                          # 6 попыток
-    "retry_delay": timedelta(minutes=10), # каждые 10 минут
-    "execution_timeout": timedelta(minutes=7),  # одна попытка ≤ 7 минут
+    "retries": 5,
+    "retry_delay": timedelta(minutes=1), # каждые 10 минут
+    "execution_timeout": timedelta(minutes=15),  # одна попытка
 }
 
 
 ## ---------------------------------------------------------------------
 ## DAG definition
 ## ---------------------------------------------------------------------
+local_tz = pendulum.timezone("Europe/Moscow")
+
 with DAG(
     dag_id="polar_vortex_pipeline",
-    description="Daily polar vortex data update and notification pipeline",
-    start_date=datetime(2024, 1, 1),
-    schedule="0 3,9,15,20 * * *",   # 03, 09, 15, 20
+    start_date=datetime(2024, 1, 1, tzinfo=local_tz),
+    schedule="0 2,8,14,20 * * *",
     catchup=False,
     max_active_runs=1,
-    default_args=default_args,
-    tags=["polar_vortex"],
-) as dag:
+):
 
     ## -----------------------------------------------------------------
     ## Helpers / placeholders 
     ## -----------------------------------------------------------------
-    start = EmptyOperator(task_id="start")
-    end = EmptyOperator(task_id="end")
+    start = EmptyOperator(
+        task_id="start"
+    )
+    end = EmptyOperator(
+        task_id="end",
+        trigger_rule="all_done",
+    )
 
 
     ## -----------------------------------------------------------------
     ## ERA branch (09:00 only)
     ## -----------------------------------------------------------------
     def is_era_time():
-        """
-        ERA обновляем только в 09:00
-        """
-        now = timezone.utcnow()
+        now = datetime.now(timezone.utc)
         return now.hour == 9
-    
 
-    def cleanup_old_era():
-            """
-            Удаляем старые ERA файлы.
-            Ошибки не фатальны.
-            """
-            loader = ERA5_loader()
-            try:
-                loader.remove_tmpfs()
-            except Exception as e:
-                pass
+
+    # def cleanup_old_era():
+    #         """
+    #         Удаляем старые ERA файлы.
+    #         Ошибки не фатальны.
+    #         """
+    #         if not is_era_time:
+    #             return "ERA already available"
+    #         loader = ERA5_loader()
+    #         try:
+    #             loader.remove_tmpfs()
+    #         except Exception as e:
+    #             pass
 
 
     def load_era():
+        if not is_era_time():
+            return "ERA already available"
+
         loader = ERA5_loader()
 
         try:
+            loader.remove_tmpfs()
             loader.load()
             loader.merge()
 
@@ -112,49 +121,54 @@ with DAG(
 
 
 
-    era_gate = ShortCircuitOperator(
-        task_id="era_gate",
-        python_callable=is_era_time,
-    )
+    # era_gate = ShortCircuitOperator(
+    #     task_id="era_gate",
+    #     python_callable=is_era_time,
+    # )
 
-    cleanup_old_era_task = PythonOperator(
-        task_id="cleanup_old_era",
-        python_callable=cleanup_old_era,
-    )
+    # cleanup_old_era_task = PythonOperator(
+    #     task_id="cleanup_old_era",
+    #     python_callable=cleanup_old_era,
+    # )
 
     load_era_task = PythonOperator(
         task_id="load_era",
         python_callable=load_era,
     )
 
+    # era_ready = EmptyOperator(
+    #     task_id="era_ready",
+    #     trigger_rule="none_failed_min_one_success"
+    # )
 
 
     ## -----------------------------------------------------------------
     ## GFS tasks (always)
     ## -----------------------------------------------------------------
-    def cleanup_old_gfs_fact_tmpfs():
-        loader = GFS_loader()
-        try:
-            loader.remove_fact_tmpfs()
-        except Exception as e:
-            raise FatalPipelineError(
-                "GFS remove fact tmpfs ERROR: pipeline is inconsistent"
-            ) from e
+    # def cleanup_old_gfs_fact_tmpfs():
+    #     loader = GFS_loader()
+    #     try:
+    #         loader.remove_fact_tmpfs()
+    #     except Exception as e:
+    #         raise FatalPipelineError(
+    #             "GFS remove fact tmpfs ERROR: pipeline is inconsistent"
+    #         ) from e
 
-    def cleanup_old_gfs_forecast_tmpfs():
-        loader = GFS_loader()
-        try:
-            loader.remove_forecast_tmpfs()
-        except Exception as e:
-            raise FatalPipelineError(
-                "GFS remove forcast tmpfs ERROR: pipeline is inconsistent"
-            ) from e
+    # def cleanup_old_gfs_forecast_tmpfs():
+    #     loader = GFS_loader()
+    #     try:
+    #         loader.remove_forecast_tmpfs()
+    #     except Exception as e:
+    #         raise FatalPipelineError(
+    #             "GFS remove forcast tmpfs ERROR: pipeline is inconsistent"
+    #         ) from e
 
 
     def load_gfs_fact():
         loader = GFS_loader()
 
         try:
+            loader.remove_fact_tmpfs()
             loader.load_fact()
             ds = loader.merge_fact_tmpfs()
 
@@ -184,6 +198,7 @@ with DAG(
         loader = GFS_loader()
 
         try:
+            loader.remove_forecast_tmpfs()
             loader.load_forecast()
             ds = loader.merge_forecast_tmpfs()
 
@@ -219,15 +234,15 @@ with DAG(
         python_callable=load_gfs_forecast,
     )
 
-    cleanup_old_gfs_fact_task = PythonOperator(
-        task_id="cleanup_old_gfs_fact",
-        python_callable=cleanup_old_gfs_fact_tmpfs,
-    )
+    # cleanup_old_gfs_fact_task = PythonOperator(
+    #     task_id="cleanup_old_gfs_fact",
+    #     python_callable=cleanup_old_gfs_fact_tmpfs,
+    # )
     
-    cleanup_old_gfs_forecast_task = PythonOperator(
-        task_id="cleanup_old_gfs_forecast",
-        python_callable=cleanup_old_gfs_forecast_tmpfs,
-    )
+    # cleanup_old_gfs_forecast_task = PythonOperator(
+    #     task_id="cleanup_old_gfs_forecast",
+    #     python_callable=cleanup_old_gfs_forecast_tmpfs,
+    # )
 
     ## -----------------------------------------------------------------
     ## Merge all datasets
@@ -278,6 +293,7 @@ with DAG(
     ## -----------------------------------------------------------------
 
     def build_images():
+        preproc = Vars()
         const = Constant()
         plotter = Plotter()
 
@@ -287,9 +303,37 @@ with DAG(
                 f"merged_data_{const.today.date().strftime('%Y_%m_%d')}.nc"
             )
 
-            plotter.build_all(
-                ds=ds,
-                out_dir=const.images_dir,
+            u_df = preproc.get_u60_df(ds)
+            t_df = preproc.get_t_df(ds)
+            eddy_df = preproc.get_eddy_hf_df(ds)
+
+            plotter.plot_graph(
+                u_df,
+                var_name='u',
+                ylabel="Wind speed (m/s)",
+                xlabel="Date",
+                title="Zonal mean wind U(60°N, 10 hPa)",
+                show=True,
+                save_image=True,
+            )
+            plotter.plot_graph(
+                t_df,
+                var_name='t_C',
+                ylabel="Temperature (°C)",
+                xlabel="Date",
+                title="Polar cap temperature (60–90°N, 10 hPa)",
+                show=True,
+                save_image=True,
+            )
+            plotter.plot_graph(
+                eddy_df,
+                var_name='hf_40_anomaly',
+                ylabel="Heat flux anomaly (K·m/s)",
+                xlabel="Date",
+                title="Eddy heat flux anomaly (40-day running mean)",
+                show=True,
+                show_today=True,
+                save_image=True,
             )
 
         except Exception as e:
@@ -314,7 +358,10 @@ with DAG(
         try:
             bot = get_bot()
             chat_id = int(get_secret("TG_CHAT_ID"))
-            images = sorted(const.images_dir.glob("*.png"))
+            images = sorted(
+                const.images_dir.glob("*.png"),
+                key=lambda p: p.stat().st_mtime
+            )[-3:]
 
             if not images:
                 raise RuntimeError("No images found to send")
@@ -358,7 +405,8 @@ with DAG(
     send_failed_task = PythonOperator(
         task_id="send_failed_message_to_telegram",
         python_callable=send_failed_message_to_telegram,
-        trigger_rule=TriggerRule.ONE_FAILED,
+        # trigger_rule=TriggerRule.ONE_FAILED,
+        trigger_rule="one_failed"
     )
 
 
@@ -380,9 +428,9 @@ with DAG(
     ## Dependencies
     ## -----------------------------------------------------------------
 
-    start >> era_gate >> cleanup_old_era_task >> load_era_task
-    start >> cleanup_old_gfs_fact_task >> load_gfs_fact_task
-    start >> cleanup_old_gfs_forecast_task >> load_gfs_forecast_task
+    start >> load_era_task
+    start >> load_gfs_fact_task
+    start >> load_gfs_forecast_task
 
     [
         load_era_task,

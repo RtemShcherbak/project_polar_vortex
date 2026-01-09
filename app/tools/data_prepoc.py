@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from functools import wraps
 
-from configs import Logger, Constant
+from .configs import Logger, Constant
 
 
 ## ------------------------------------------------------------------------

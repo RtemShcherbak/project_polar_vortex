@@ -7,10 +7,10 @@ from dataclasses import dataclass, field
 import logging
 from typing import Optional
 from logging.handlers import RotatingFileHandler
-from get_secrets import get_secret
+from .get_secrets import get_secret
 
-ROOT_PATH = "/Users/artem/Documents/Zerich/polar_vortex/project_polar_vortex/app" 
-# ROOT_PATH = "/opt/airflow/app"
+# ROOT_PATH = "/Users/artem/Documents/Zerich/polar_vortex/project_polar_vortex/app" 
+ROOT_PATH = "/opt/airflow/app"
 
 
 
@@ -126,6 +126,7 @@ class Constant:
     ## Dirs
     ## ----------------------------------------------------------------------
     root_dir: Path = Path(ROOT_PATH)
+    data_dir: Path = root_dir / "data" / 'datasets'
     fact_dir: Path = root_dir / "data" / 'datasets' / "fact"
     forecast_dir: Path = root_dir / "data" / 'datasets' / "forecast"
     images_dir: Path = root_dir / "data" / "images"
@@ -219,6 +220,6 @@ class GFS_const:
     ## --- FACT --- ##
     fact_cycle: str = '00'
     ## --- FORECAST --- ##
-    forecast_cycle: str = "auto" #"auto" #"06"
+    forecast_cycle: str = "06" #"auto" #"06"
     forecast_days: int = 14
     forecast_step_hours: int = 6

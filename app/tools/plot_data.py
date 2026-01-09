@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-from configs import Constant, Logger
+from .configs import Constant, Logger
 from typing import List, Dict, Union
 from pathlib import Path
 

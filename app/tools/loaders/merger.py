@@ -64,7 +64,7 @@ class Merger:
         ## ERA xds
         ## ---------------------------------------------------------------------
         self.logger.debug("[MERGER] start prepare era")
-        era_data = era_fact_xds.load().reset_coords(
+        era_data = era_fact_xds.reset_coords(
             ["number", "expver"], drop=True
         )
         self.logger.debug("[MERGER] end prepare era")

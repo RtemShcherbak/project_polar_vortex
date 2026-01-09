@@ -9,8 +9,6 @@ __pycache__/
 secrets.yaml
 *.secrets.yaml
 
-
-
 # Logs
 logs/
 logs_1/
@@ -33,11 +31,13 @@ gfs_tmp_files/
 .DS_Store
 .vscode/
 
-
 # Jupyter
 *.ipynb
-
 
 # Old backups
 OLD_*
 *OLD*
+
+# netcdf outputs
+*.nc
+
