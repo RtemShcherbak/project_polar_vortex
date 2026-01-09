@@ -17,3 +17,6 @@ pyyaml
 
 # Plotting (если реально используешь в DAG или utils)
 matplotlib
+
+# telegram bot
+python-telegram-bot>=20.0

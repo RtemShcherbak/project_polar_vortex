@@ -4,7 +4,7 @@ import pandas as pd
 import xarray as xr
 
 from app.tools.configs import ERA_const, Constant, Logger
-from exceptions import (
+from app.tools.loaders.exceptions import (
     TemporaryDataUnavailable, IncompleteDataError, 
     DataValidationError, FatalPipelineError
 )
@@ -154,13 +154,16 @@ class ERA5_loader:
 
 
     def remove_tmpfs(self):
-        era_nc_files = [
-            self.const.fact_dir / "era_tmp_files" / self.era_filename(year)
-            for year in self.__specify_dates().keys()
-        ]
-        # удаляем временные файлы
+        """
+        Полный cleanup временных ERA файлов.
+        """
+        tmp_dir = self.const.fact_dir / "era_tmp_files"
+
+        if not tmp_dir.exists():
+            return
+
         if self.era_const.cleanup_tmpfs:
-            for f in era_nc_files:
+            for f in tmp_dir.glob("*.nc"):
                 try:
                     f.unlink()
                     self.logger.loading(
@@ -170,4 +173,5 @@ class ERA5_loader:
                     self.logger.loading_error(
                         f"[FACT_ERA] FAILED removing {f} | {type(e).__name__}: {e}"
                     )
+
         

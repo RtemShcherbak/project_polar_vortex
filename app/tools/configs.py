@@ -128,6 +128,7 @@ class Constant:
     root_dir: Path = Path(ROOT_PATH)
     fact_dir: Path = root_dir / "data" / 'datasets' / "fact"
     forecast_dir: Path = root_dir / "data" / 'datasets' / "forecast"
+    images_dir: Path = root_dir / "data" / "images"
     ## ----------------------------------------------------------------------
     ## Climate data
     ## ----------------------------------------------------------------------

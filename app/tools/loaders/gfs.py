@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from app.tools.configs import GFS_const, Constant, Logger
-from exceptions import (
+from app.tools.loaders.exceptions import (
     TemporaryDataUnavailable, IncompleteDataError, 
     DataValidationError, FatalPipelineError
 )

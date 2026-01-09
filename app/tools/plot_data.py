@@ -27,7 +27,7 @@ class Plotter:
         fill_between: bool = False,
         show_ssw_25: bool = False,
         show_today: bool = True,
-        save_dir: Path | None = None,
+        save_image: bool = False,
         filename: str | None = None,
         show: bool = True,
     ):
@@ -153,12 +153,12 @@ class Plotter:
         # -----------------------------
         # сохранение
         # -----------------------------
-        if save_dir is not None:
-            save_dir = Path(save_dir)
+        if save_image:
+            save_dir = self.const.images_dir
             save_dir.mkdir(parents=True, exist_ok=True)
 
             if filename is None:
-                filename = f"{var_name}.png"
+                filename = f"{var_name}_{self.const.today}.png"
 
             out_path = save_dir / filename
             fig.savefig(out_path, dpi=150, bbox_inches="tight")
