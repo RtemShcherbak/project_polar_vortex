@@ -130,7 +130,7 @@ class ERA5_loader:
 
         target = (
             self.const.fact_dir /
-            f"era_data_{self.const.today.date().strftime('%Y_%m_%d')}.nc"
+            f"era_data.nc"
         )
         self.logger.loading(
             f"[FACT_ERA] Opening {len(era_nc_files)} ERA NetCDF files"

@@ -2,6 +2,7 @@ import xarray as xr
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.exceptions import AirflowFailException
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.utils.trigger_rule import TriggerRule
@@ -37,8 +38,8 @@ from app.tools.get_secrets import get_secret
 default_args = {
     "owner": "polar_vortex",
     "depends_on_past": False,
-    "retries": 5,
-    "retry_delay": timedelta(minutes=1), # каждые 10 минут
+    "retries": 10,
+    "retry_delay": timedelta(minutes=5),
     "execution_timeout": timedelta(minutes=15),  # одна попытка
 }
 
@@ -54,6 +55,7 @@ with DAG(
     schedule="0 2,8,14,20 * * *",
     catchup=False,
     max_active_runs=1,
+    default_args=default_args,
 ):
 
     ## -----------------------------------------------------------------
@@ -73,7 +75,7 @@ with DAG(
     ## -----------------------------------------------------------------
     def is_era_time():
         now = datetime.now(timezone.utc)
-        return now.hour == 9
+        return True #now.hour == 9
 
 
     # def cleanup_old_era():
@@ -117,7 +119,8 @@ with DAG(
 
         except Exception as e:
             loader.remove_tmpfs()
-            raise FatalPipelineError("Fatal error in ERA pipeline") from e
+            raise AirflowFailException("Fatal error in ERA pipeline") from e
+
 
 
 
@@ -191,7 +194,7 @@ with DAG(
 
         except Exception as e:
             loader.remove_fact_tmpfs()
-            raise FatalPipelineError("Fatal error in GFS FACT pipeline") from e
+            raise AirflowFailException("Fatal error in GFS FACT pipeline") from e
 
 
     def load_gfs_forecast():
@@ -221,7 +224,7 @@ with DAG(
 
         except Exception as e:
             loader.remove_forecast_tmpfs()
-            raise FatalPipelineError("Fatal error in GFS FORECAST pipeline") from e
+            raise AirflowFailException("Fatal error in GFS FORECAST pipeline") from e
 
 
     load_gfs_fact_task = PythonOperator(
@@ -253,14 +256,13 @@ with DAG(
 
         try:
             era_data = xr.open_dataset(
-                const.fact_dir / f"era_data_{const.today.date().strftime('%Y_%m_%d')}.nc"
+                const.fact_dir / f"era_data.nc"
             )
             gfs_fact = xr.open_dataset(
                 const.fact_dir / "gfs_data.nc"
             )
             gfs_forecast = xr.open_dataset(
-                const.forecast_dir /
-                f"gfs_data_{const.today.date().strftime('%Y_%m_%d')}.nc"
+                const.forecast_dir / f"gfs_data.nc"
             )
 
             ds = merger.merge_datasets(
@@ -269,15 +271,12 @@ with DAG(
                 gfs_forecast_xds=gfs_forecast,
             )
             #TODO переделать merger чтоб сохранял датасет итоговый
-            out_path = (
-                const.data_dir /
-                f"merged_data_{const.today.date().strftime('%Y_%m_%d')}.nc"
-            )
+            out_path = (const.data_dir / f"merged_data.nc")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             ds.to_netcdf(out_path)
 
         except Exception as e:
-            raise FatalPipelineError(
+            raise AirflowFailException(
                 "Unexpected fatal error during merge_all"
             ) from e
 
@@ -300,7 +299,7 @@ with DAG(
         try:
             ds = xr.open_dataset(
                 const.data_dir /
-                f"merged_data_{const.today.date().strftime('%Y_%m_%d')}.nc"
+                f"merged_data.nc"
             )
 
             u_df = preproc.get_u60_df(ds)
@@ -338,7 +337,7 @@ with DAG(
 
         except Exception as e:
             # всё остальное — баг в визуализации
-            raise FatalPipelineError(
+            raise AirflowFailException(
                 "Unexpected fatal error during build_images"
             ) from e
 
@@ -376,7 +375,7 @@ with DAG(
             )
 
         except Exception as e:
-            raise FatalPipelineError(
+            raise AirflowFailException(
                 "Failed to send images to Telegram"
             ) from e
 

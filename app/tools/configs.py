@@ -220,6 +220,6 @@ class GFS_const:
     ## --- FACT --- ##
     fact_cycle: str = '00'
     ## --- FORECAST --- ##
-    forecast_cycle: str = "06" #"auto" #"06"
+    forecast_cycle: str = "auto" #"auto" #"06"
     forecast_days: int = 14
     forecast_step_hours: int = 6

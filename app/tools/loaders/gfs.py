@@ -357,10 +357,7 @@ class GFS_loader:
 
     def merge_forecast_tmpfs(self):
         try: 
-            xds_filename = (
-                self.const.forecast_dir / 
-                f"gfs_data_{self.const.today.date().strftime('%Y_%m_%d')}.nc"
-            )
+            xds_filename = (self.const.forecast_dir / f"gfs_data.nc")
             ds_all = self.__merge_tmpfs(
                 grib_dir=self.const.forecast_dir / "gfs_tmp_files",
                 out_nc=xds_filename

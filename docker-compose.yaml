@@ -40,7 +40,7 @@ version: '3'
 x-airflow-common:
   &airflow-common
   build: .
-  image: ${AIRFLOW_IMAGE_NAME:-extending_airflow:latest}
+  image: ${AIRFLOW_IMAGE_NAME:-polar_vortex_project:latest}
   env_file:
     - .env
   environment:
